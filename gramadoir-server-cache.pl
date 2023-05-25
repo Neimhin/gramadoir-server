@@ -41,9 +41,7 @@ sub to_latin1_range {
 
 get '/:sentence' => sub {
     my $sentence = route_parameters->get('sentence');
-    debug $sentence;
     my $errs = $gr->grammatical_errors(encode('UTF-8', to_latin1_range($sentence)));
-    debug $errs;
     # my $errs = $gr->grammatical_errors($sentence);
     my @errs_json;
     foreach my $error (@$errs) {
@@ -61,7 +59,6 @@ get '/:sentence' => sub {
                             'errortext' => $errortext,
                         };
     }
-    debug @errs_json;
     return \@errs_json;
 };
 
