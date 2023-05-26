@@ -1,3 +1,4 @@
+#!/usr/bin/perl
 use lib ".";
 use JSON qw( to_json );
 use Encode qw( encode decode FB_CROAK LEAVE_SRC );
@@ -17,7 +18,9 @@ my $gr = new Lingua::GA::Gramadoir(
 );
 
 set serializer => 'JSON';
-set port => $ENV{'port'};
+my $DEFAULT_PORT = 4100;
+set port => $ENV{'port'} || $DEFAULT_PORT;
+
 
 # perl unicode strings to perl unicode strings
 # surveyed most common codepoints above 00FF in Tuairisc for this

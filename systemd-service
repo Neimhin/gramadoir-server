@@ -1,0 +1,10 @@
+[Unit]
+Description=start gramadoir Dancer2 server
+After=network.target
+
+[Service]
+ExecStart=/usr/local/bin/gramadoir-server
+
+
+[Install]
+WantedBy=multi-user.target
