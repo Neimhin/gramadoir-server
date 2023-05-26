@@ -18,7 +18,7 @@ my $gr = new Lingua::GA::Gramadoir(
 );
 
 set serializer => 'JSON';
-my $DEFAULT_PORT = 4100;
+my $DEFAULT_PORT = 10002;
 set port => $ENV{'port'} || $DEFAULT_PORT;
 
 

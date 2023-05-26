@@ -5,4 +5,4 @@ sudo systemctl enable --now $SERVICE_NAME
 
 
 # e.g.
-curl localhost:4100/mo%20madra
+curl localhost:10002/mo%20madra
