@@ -14,7 +14,7 @@ my $gr = new Lingua::GA::Gramadoir(
 	fix_spelling => 1,
 	use_ignore_file => 0,
 	unigram_tagging => 1,
-	interface_language => "en",
+	interface_language => "ga",
 	input_encoding => 'utf-8',
 );
 
@@ -53,6 +53,15 @@ sub to_latin1_range {
 #        	# Return a response indicating successful shutdown
 #       	return 'Server shutdown initiated';
 # };
+
+get '/identity' => sub {
+    my $text = params->{'text'};
+    unless($text) {
+	    status 400;
+	    return "Missing 'text' parameter";
+    }
+    return to_json($text);
+};
 
 get '/gram/:sentence' => sub {
     my $sentence = route_parameters->get('sentence');
@@ -101,42 +110,18 @@ sub check_type_and_structure {
     }
 }
 
-post '/get_sentences_real' => sub {
-    my $text = decode_json(request->body);
-    my $sentences = Lingua::GA::Gramadoir::get_sentences_real($text);
-    my $json = to_json($sentences);
-    return $json;
-};
-
-post '/tidy_input' => sub {
-    my $text = decode_json(request->body);
-    my $sentences = Lingua::GA::Gramadoir::tidy_input($text);
-    my $json = to_json($sentences);
-    return $json;
-};
-
-get '/add_tags_real' => sub {
+get '/pos_tag' => sub {
     my $text = params->{'text'};
     unless($text) {
 	    status 400;
 	    return "Missing 'text' parameter";
     }
-    my $result = $gr->add_tags_real($text);
-    return to_json($result);
-};
-
-get '/rialacha' => sub {
-    my $text = params->{'xml'};
-    debug $text;
-    unless($text) {
-	    status 400;
-	    return "Missing 'xml' parameter";
-    }
-    Lingua::GA::Gramadoir::rialacha($text);
+    $text = $gr->unchecked_xml($text);
     return to_json($text);
 };
 
-get '/finalise' => sub {
+
+get '/extract_errors' => sub {
 	my $pristine = params->{'pristine'};
 	my $plain = params->{'plain'};
 	my $s = params->{'xml_after_rules_applied'};
@@ -163,11 +148,13 @@ get '/finalise' => sub {
 			$prefix = Lingua::GA::Gramadoir::regexify($prefix);
 			$errorregex = Lingua::GA::Gramadoir::regexify($errorregex);
 			$errorregex =~ s/\[\^[^]]+\]\*$//;
+
 			my $fromy;
 			my $fromx;
 			my $matchregex = "$prefix($errorregex)";
 			$matchregex =~ s/^/(?<=[^A-Z\x{c1}\x{c9}\x{cd}\x{d3}\x{da}a-z\x{e1}\x{e9}\x{ed}\x{f3}\x{fa}])/ unless $prefix;
-			print "MRE=$matchregex\n";
+
+
 			$pristine =~ m!$matchregex!gs;
 			my $globs = $-[1];
 			my $globe = $+[1];
@@ -186,6 +173,8 @@ get '/finalise' => sub {
 				$str =~ m/([^\n]+)$/s;
 				$fromx = length ($1); 
 			}
+
+
 			$str = substr($pristine, $globs, $globe - $globs);
 			$toy = $fromy + ($str =~ tr/\n/\n/); 
 			if ($fromy == $toy) {
@@ -195,6 +184,7 @@ get '/finalise' => sub {
 				$str =~ m/([^\n]+)$/s;
 				$tox = length ($1) - 1 ; 
 			}
+
 			$endoflast = $globe;
 			$fromx--;
 			my $toans = $tox - 1;  # keep tox for next err 
@@ -204,30 +194,33 @@ get '/finalise' => sub {
 			my $offset = $-[1] - 1;
 			my $errortext = $1;
 			my $errlen = length($errortext);
+
 			$thiserror =~ s!^<E (msg="(.+)")>$!<error fromy="$fromy" fromx="$fromx" toy="$toy" tox="$toans" ruleId="Lingua::GA::Gramadoir/$2" $1 context="$plain" contextoffset="$offset" errorlength="$errlen"/>!;
 			$thiserror = decode("ISO-8859-1", $thiserror);
 			$thiserror =~ s! msg="([^"]+)"!" msg=\"".$gr->localize_me($1)."\""!e;
+
 			push @$errors, $thiserror;
 		}
 	}
 
-    	my @errs_json;
-    	foreach my $error (@$errors) {
-    	    (my $fy, my $fx, my $toy, my $tox, my $ruleId, my $msg, my $context, my $contextoffset, my $errorlength) = $error =~ m/^<error fromy="([0-9]+)" fromx="([0-9]+)" toy="([0-9]+)" tox="([0-9]+)" ruleId="([^"]+)" msg="([^"]+)".* context="([^"]+)" contextoffset="([0-9]+)" errorlength="([0-9]+)"\/>$/;
-    	    my $errortext = substr($context,$contextoffset,$errorlength);
-    	    push @errs_json, {'fromy' => $fy,
-    	                        'fromx' => $fx,
-    	                        'toy' => $toy,
-    	                        'tox' => $tox,
-    	                        'ruleId' => $ruleId,
-    	                        'msg' => $msg,
-    	                        'context' => $context,
-    	                        'contextoffset' => $contextoffset,
-    	                        'errorlength' => $errorlength,
-    	                        'errortext' => $errortext,
-    	                    };
-    	}
-    	return \@errs_json;
+	my @errs_json;
+	foreach my $error (@$errors) {
+		(my $fy, my $fx, my $toy, my $tox, my $ruleId, my $msg, my $context, my $contextoffset, my $errorlength) = $error =~ m/^<error fromy="([0-9]+)" fromx="([0-9]+)" toy="([0-9]+)" tox="([0-9]+)" ruleId="([^"]+)" msg="([^"]+)".* context="([^"]+)" contextoffset="([0-9]+)" errorlength="([0-9]+)"\/>$/;
+		my $errortext = substr($context,$contextoffset,$errorlength);
+		push @errs_json, {'fromy' => $fy,
+							'fromx' => $fx,
+							'toy' => $toy,
+							'tox' => $tox,
+							'ruleId' => $ruleId,
+							'msg' => $msg,
+							'context' => $context,
+							'contextoffset' => $contextoffset,
+							'errorlength' => $errorlength,
+							'errortext' => $errortext,
+						};
+	}
+	
+	return \@errs_json;
 };
 
 start;
