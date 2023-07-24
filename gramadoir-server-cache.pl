@@ -41,7 +41,7 @@ sub to_latin1_range {
 	return $txt;
 }
 
-get '/' => sub {
+get '' => sub {
     my ($sentence) = params->{'text'};
     debug $sentence;
     my $errs = $gr->grammatical_errors(encode('UTF-8', to_latin1_range($sentence)));
