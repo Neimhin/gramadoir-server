@@ -21,7 +21,6 @@ set serializer => 'JSON';
 my $DEFAULT_PORT = 10002;
 set port => $ENV{'port'} || $DEFAULT_PORT;
 
-
 # perl unicode strings to perl unicode strings
 # surveyed most common codepoints above 00FF in Tuairisc for this
 # below includes everything appearing >= 100 times as of Apr 2018
@@ -42,8 +41,9 @@ sub to_latin1_range {
 	return $txt;
 }
 
-get '/:sentence' => sub {
-    my $sentence = route_parameters->get('sentence');
+get '/' => sub {
+    my ($sentence) = params->{'text'};
+    debug $sentence;
     my $errs = $gr->grammatical_errors(encode('UTF-8', to_latin1_range($sentence)));
     # my $errs = $gr->grammatical_errors($sentence);
     my @errs_json;
