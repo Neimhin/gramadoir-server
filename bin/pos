@@ -1,0 +1,1 @@
+curl localhost:80/pos_tag?text=hello -H host:gramadoir-breakdown.scealai.abair.ie

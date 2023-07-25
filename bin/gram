@@ -1,0 +1,13 @@
+#!/bin/bash
+stderr() {
+	1>&2 echo $@
+}
+
+single() {
+	echo $*
+}
+text=$(single ${@:2})
+2>/dev/null curl --get \
+	--data-urlencode "text=$text" \
+	localhost:80/$1 \
+	-H host:gramadoir-breakdown.scealai.abair.ie

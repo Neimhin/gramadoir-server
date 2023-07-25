@@ -1,0 +1,10 @@
+#!/bin/bash
+
+text=$@
+text=$(./bin/gram tokenize_real $text)
+text=$(./bin/gram dubailte_pre  $text)
+text=$(./bin/gram tag_each_word $text)
+text=$(./bin/gram dubailte_post $text)
+text=$(./bin/gram wrap_line_tag $text)
+
+echo $text

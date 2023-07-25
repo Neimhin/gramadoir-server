@@ -1,0 +1,232 @@
+#!/usr/bin/perl
+use lib ".";
+use JSON qw( to_json );
+use Encode qw( encode decode FB_CROAK LEAVE_SRC );
+use Dancer2;
+use Lingua::GA::Gramadoir;
+use Data::Dumper;
+
+binmode STDIN, ":utf8";
+binmode STDOUT, ":utf8";
+binmode STDERR, ":utf8";
+
+my $gr = new Lingua::GA::Gramadoir(
+	fix_spelling => 1,
+	use_ignore_file => 0,
+	unigram_tagging => 1,
+	interface_language => "ga",
+	input_encoding => 'utf-8',
+);
+
+# set serializer => 'JSON';
+my $DEFAULT_PORT = 8081;
+set port => $ENV{'port'} || $DEFAULT_PORT;
+
+# perl unicode strings to perl unicode strings
+# surveyed most common codepoints above 00FF in Tuairisc for this
+# below includes everything appearing >= 100 times as of Apr 2018
+# (and these are all in thousands!)
+sub to_latin1_range {
+	(my $txt) = @_;
+	for ($txt) {
+		s/–/-/g; # U+2013
+		s/—/-/g; # U+2014
+		s/‘/'/g; # U+2018
+		s/’/'/g; # U+2019
+		s/“/"/g; # U+201C
+		s/”/"/g; # U+201D
+		s/…/./g; # U+2026  (want to preserve length for offsets :/)
+		s/€/E/g; # U+20AC
+		s/\x{0D}\x{0A}/\n/g;  # CGI adds these?
+	}
+	return $txt;
+}
+
+get '/pos_tag' => sub {
+    my $text = params->{'text'};
+    unless($text) {
+	    status 400;
+	    return "Missing 'text' parameter";
+    }
+    $text = $gr->unchecked_xml($text);
+    return $text;
+};
+
+get '/tokenize_real' => sub {
+    my $text = params->{'text'};
+    unless($text) {
+	    status 400;
+	    return "Missing 'text' parameter";
+    }
+    $text = $gr->tokenize_real($text);
+    return $text;
+};
+
+get '/pos_tag_post_process_1' => sub {
+    my $text = params->{'text'};
+    unless($text) {
+	    status 400;
+	    return "Missing 'text' parameter";
+    }
+		$text =~ s/(<[A-Zc][^>]*>[^<]+<\/[A-Zc]>) \1/<E msg="DUBAILTE">$1 $1<\/E>/g;
+		1 while ( $text =~ s/<c>([^<]*)<\/c>/$gr->tag_one_word($1);/e );
+		$text =~ s/<E msg="DUBAILTE">(<E[^>]+><X>[^<]+<\/X><\/E>) \1<\/E>/$1 $1/g;
+
+		return $text;
+};
+
+get '/dubailte_pre' => sub {
+	my $text = params->{'text'};
+	unless($text) { status 400; return "Missing 'text' paramater"; }
+	$text =~ s/(<[A-Zc][^>]*>[^<]+<\/[A-Zc]>) \1/<E msg="DUBAILTE">$1 $1<\/E>/g;
+	return $text;
+};
+
+get '/tag_each_word' => sub {
+	my $text = params->{'text'};
+	unless($text) { status 400; return "Missing 'text' paramater"; }
+	1 while ( $text =~ s/<c>([^<]*)<\/c>/$gr->tag_one_word($1);/e );
+	return $text;
+};
+
+get '/dubailte_post' => sub {
+	my $text = params->{'text'};
+	unless($text) { status 400; return "Missing 'text' paramater"; }
+	$text =~ s/<E msg="DUBAILTE">(<E[^>]+><X>[^<]+<\/X><\/E>) \1<\/E>/$1 $1/g;
+	return $text;
+};
+
+get '/wrap_line_tag' => sub {
+	my $text = params->{'text'};
+	unless($text) { status 400; return "Missing 'text' paramater"; }
+	$text =~ s/^/<line> /;
+	$text =~ s/$/ <\/line>/;
+	return $text;
+};
+
+get '/tag_one_word' => sub {
+	my $text = params->{'text'};
+	debug $text;
+	unless($text) { status 400; return "Missing 'text' paramater"; }
+	$text =~ s/<c>([^<]*)<\/c>/$gr->tag_one_word($1);/e;
+	return $text;
+};
+
+# # takes a single word as an argument and returns it tagged, without fail
+# # e.g. it will get something like <X>neamhword</X> if it is unknown
+# sub tag_one_word
+# {
+# 	my ( $self, $word ) = @_;
+
+# 	if ($self->{'use_ignore_file'}) {
+# 		return "<Y>".$word."</Y>" if ( exists($IGNORE{$word}) );
+# 	}
+# 	my $ans = $self->tag_one_word_clean($word);
+# 	return $ans if $ans;
+# 	my $dummy;
+# 	$ans = $self->tag_recurse($word, $word, -1, \$dummy, 6);
+# 	return $ans if $ans;
+# 	$ans = $self->tag_as_compound($word);
+# 	return $ans if $ans;
+# 	$ans = $self->tag_as_near_miss($word);
+# 	return $ans if $ans;
+# 	$ans = $self->find_bad_three_grams($word);
+# 	return $ans if $ans;
+# 	return "<X>$word</X>";
+# }
+
+get '/tag_one_word/strip_token_tag' => sub {
+	my $text = params->{'text'};
+	$text =~ s/<c>([^<]*)<\/c>/$1/;
+	return $text;
+};
+
+
+# sub tag_one_word_clean
+# {
+# 	my ( $self, $word ) = @_;
+
+# 	my $ans = $self->clean_tag_recurse($word, 4);
+# 	if ($ans) {
+# 		# sort -u, plus take out <F> if there are others
+# 		my %tempseen;
+# 		while ($ans =~ m/(<[^>]+>)/g) {
+# 			my $cod = $SOP{$1};
+# 			if (defined($cod)) {
+# 				$tempseen{$cod}++;
+# 			}
+# 			else {
+# 				carp gettext('%s: illegal grammatical code\n',
+# 						gettext('An Gramadoir'));
+# 			}
+# 		}
+# 		my $codez = join('', sort(keys %tempseen));
+# 		$codez =~ s/\177// if (length($codez) > 1);
+# 		$ans = $self->add_grammar_tags($word, $codez);
+# 	}
+# 	return $ans;
+# }
+
+get '/tag_one_word_clean' => sub {
+	my $word = params->{'text'};
+	unless($word) { status 400; return "Missing 'text' parameter"; }
+	my $ans = $gr->tag_one_word_clean($word);
+	return $ans if $ans;
+	status 204;
+	return
+};
+
+get '/tag_as_compound' => sub {
+	my $text = params->{'text'};
+	unless($text) { status 400; return "Missing 'text' paramater"; }
+	my $ans = $gr->tag_as_compound($text);
+	return $ans if $ans;
+	status 204;
+	return;
+};
+
+get '/tag_one_word_clean/clean_tag_recurse' => sub {
+	my $text = params->{'text'};
+	unless($text) { status 400; return "Missing 'text' paramater"; }
+  my $ans = $gr->clean_tag_recurse($text, 4);
+	unless($ans) { status 204; }
+	return $ans;
+};
+
+use File::Spec;
+use Storable;
+use vars qw(@FOCAIL @MORPH @PUREMORPH @TOKEN %EILE %EARRAIDI %NOCOMBO %POS %SOP %GRAMS %MESSAGES %IGNORE $lh);
+
+my $ref;
+eval {$ref = retrieve(File::Spec->catfile('/home/nrobinso/gramadoir-server/hash/', 'pos.hash'))};
+# croak $errormsg if ($@ or !$ref);
+%POS = %$ref;
+%SOP = reverse %POS;
+debug %SOP;
+
+get '/tag_one_word_clean/part_2' => sub {
+	my $word = params->{'word'};
+	my $clean_tag = params->{'clean_tag'};
+
+	unless($word && $clean_tag) { status 400; return "Missing fields: need both 'word' and 'clean_tag'"; }
+
+	# sort -u, plus take out <F> if there are others
+	my %tempseen;
+	while ($clean_tag =~ m/(<[^>]+>)/g) {
+		my $cod = $SOP{$1};
+		if (defined($cod)) {
+			$tempseen{$cod}++;
+		}
+		else {
+			carp gettext('%s: illegal grammatical code\n',
+					gettext('An Gramadoir'));
+		}
+	}
+	my $codez = join('', sort(keys %tempseen));
+	$codez =~ s/\177// if (length($codez) > 1);
+	my $ans = $gr->add_grammar_tags($word, $codez);
+	return $ans;
+};
+
+
+start;

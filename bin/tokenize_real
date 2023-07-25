@@ -1,0 +1,7 @@
+#!/bin/bash
+echo $@
+echo "text=$@"
+curl --get \
+	--data-urlencode "text=$*" \
+	localhost:80/tokenize_real \
+	-H host:gramadoir-breakdown.scealai.abair.ie

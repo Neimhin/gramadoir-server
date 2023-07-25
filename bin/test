@@ -1,0 +1,11 @@
+#!/bin/bash
+
+
+text="$*"
+
+
+pipeline_out=$(./bin/pipeline $text);
+direct_out=$(./bin/gram pos_tag $text);
+
+
+diff <(echo $pipeline_out) <(echo $direct_out);
